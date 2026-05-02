@@ -27,4 +27,9 @@
      ```
    - **Quy tắc**: Khi viết code FreeRTOS cho ESP32/Wokwi, LUÔN include đầy đủ các header FreeRTOS. Cũng cần có `diagram.json` với board `board-esp32-devkit-v1`.
 
+3. **[2026-05-02]** Wokwi MPU6050 luôn báo lỗi (Overheating) dù ở trạng thái mặc định
+   - **Nguyên nhân**: Trong Wokwi, slider gia tốc của MPU6050 dùng để mô phỏng mức độ rung động thay vì là trọng lực tĩnh. Khi để slider = 0, trục Z là 0. Hàm inference cũ trừ đi 1.0 (trọng lực tĩnh trên trục Z) làm cho giá trị chênh lệch trở thành -1.0, tạo ra RMS = 1.0 (ngưỡng báo lỗi cao nhất).
+   - **Fix**: Bỏ logic trừ trọng lực ra khỏi hàm tính RMS và để mặc định `az = 0` thay vì `az = 1`.
+   - **Quy tắc**: Nắm rõ cách các linh kiện mô phỏng (ví dụ như MPU6050) trên Wokwi cung cấp dữ liệu giả lập để thiết kế hàm xử lý cho phù hợp, tránh áp dụng cứng nhắc lý thuyết thực tế (bỏ trọng lực tĩnh Z) vào mô phỏng.
+
 ---
