@@ -1,306 +1,310 @@
 /*
- * Fan Motor Fault Detection — FreeRTOS Simulation
- * Board: ESP32 (Wokwi Simulator)
- * Author: Tran Nguyen An Son — N22DCDT057
- * Course: He dieu hanh nhung — PTIT HCM
+ * Fan Motor Fault Detection — FreeRTOS + MPU6050
+ * Board  : ESP32 DevKit V1 (Wokwi)
+ * Author : Tran Nguyen An Son — N22DCDT057
+ * Course : He dieu hanh nhung — PTIT HCM
+ *
+ * PASTE vao file ten chinh xac la "sketch.ino" tren Wokwi
  *
  * Tasks:
- *   Task_Sensor    (Priority 5): Sample accelerometer at 62.5 Hz
- *   Task_Inference (Priority 4): Run TinyML model every 2s window
- *   Task_Alert     (Priority 3): Trigger alert on fault detection
- *   Task_Display   (Priority 2): Print status every 500ms
- *   Task_Log       (Priority 1): Log results every 1000ms
+ *   Task_Sensor    Priority 5 — Doc MPU6050 qua I2C, 62.5 Hz
+ *   Task_Inference Priority 4 — Phan loai rung dong moi 2s
+ *   Task_Alert     Priority 3 — Bat LED khi phat hien loi
+ *   Task_Display   Priority 2 — In trang thai moi 500 ms
+ *   Task_Log       Priority 1 — Ghi log moi 1000 ms
+ *
+ * Wiring MPU6050:
+ *   VCC  -> 3V3
+ *   GND  -> GND
+ *   SDA  -> GPIO 21
+ *   SCL  -> GPIO 22
  */
 
 #include <Arduino.h>
+#include <Wire.h>
 
 // ============================================================
-// Configuration
+// FreeRTOS (built-in voi ESP32 Arduino core)
 // ============================================================
-#define SAMPLE_RATE_HZ      62.5f
-#define SAMPLE_INTERVAL_MS  (1000.0f / SAMPLE_RATE_HZ)   // ~16 ms
-#define WINDOW_SIZE_SAMPLES 125   // 2s * 62.5Hz = 125 samples
-#define DISPLAY_INTERVAL_MS 500
-#define LOG_INTERVAL_MS     1000
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
 
-// LED pins
+// ============================================================
+// MPU6050 — Thanh ghi va dia chi I2C
+// ============================================================
+#define MPU6050_ADDR       0x68
+#define MPU_PWR_MGMT_1     0x6B
+#define MPU_ACCEL_XOUT_H   0x3B
+#define MPU_ACCEL_SCALE    16384.0f   // +/-2g range: 16384 LSB/g
+
+// ============================================================
+// Cau hinh he thong
+// ============================================================
+#define SAMPLE_INTERVAL_MS   16       // ~62.5 Hz
+#define WINDOW_SIZE_SAMPLES  125      // 2 giay * 62.5 Hz
+#define DISPLAY_INTERVAL_MS  500
+#define LOG_INTERVAL_MS      1000
+
 #define LED_GREEN_PIN  2
 #define LED_RED_PIN    4
 
 // ============================================================
-// Data structures
+// Cac struct du lieu
 // ============================================================
 typedef struct {
-  float x, y, z;
-  uint32_t timestamp_ms;
+  float    x, y, z;      // don vi: g
+  uint32_t ts;           // timestamp ms
 } AccelSample_t;
 
 typedef struct {
-  uint8_t class_id;       // 0=Normal, 1=Bearing, 2=Imbalance, 3=Overheating
-  float   confidence;
-  float   anomaly_score;
-  uint32_t timestamp_ms;
+  uint8_t  class_id;     // 0=Normal 1=Bearing 2=Imbalance 3=Overheating
+  float    confidence;
+  float    anomaly_score;
+  uint32_t ts;
 } InferenceResult_t;
 
-// Class labels
-const char* CLASS_LABELS[] = {"Normal", "Bearing Fault", "Imbalance", "Overheating"};
+static const char* LABELS[] = {
+  "Normal", "Bearing Fault", "Imbalance", "Overheating"
+};
 
 // ============================================================
 // FreeRTOS handles
 // ============================================================
-QueueHandle_t xSensorQueue;    // AccelSample_t, depth=WINDOW_SIZE_SAMPLES
-QueueHandle_t xResultQueue;    // InferenceResult_t, depth=5
-SemaphoreHandle_t xAlertSemaphore;
-SemaphoreHandle_t xDisplayMutex;
+static QueueHandle_t     xSensorQueue;
+static QueueHandle_t     xResultQueue;
+static SemaphoreHandle_t xI2CMutex;       // bao ve Wire (I2C)
+static SemaphoreHandle_t xDataMutex;      // bao ve lastResult
 
-// Circular buffer for sensor samples
-AccelSample_t sensorBuffer[WINDOW_SIZE_SAMPLES];
-uint16_t sampleCount = 0;
-
-// Last known result (shared, protected by mutex)
-InferenceResult_t lastResult = {0, 0.0f, 0.0f, 0};
+static AccelSample_t     sensorBuf[WINDOW_SIZE_SAMPLES];
+static uint16_t          sampleCount = 0;
+static InferenceResult_t lastResult  = {0, 0.0f, 0.0f, 0};
 
 // ============================================================
-// Mock: Simulate accelerometer reading
-// Returns vibration pattern that varies over time to demo different states
+// Khoi dong MPU6050
 // ============================================================
-AccelSample_t readAccelerometer() {
-  AccelSample_t s;
-  s.timestamp_ms = millis();
-  uint32_t t = s.timestamp_ms;
-
-  // Simulate different fault modes every 8 seconds
-  uint8_t mode = (t / 8000) % 4;
-
-  float base_z = 1.0f;  // gravity
-  float noise  = (random(-10, 10) / 100.0f);
-
-  switch (mode) {
-    case 0: // Normal — smooth, low vibration
-      s.x = 0.10f + noise;
-      s.y = 0.05f + noise;
-      s.z = base_z + noise * 0.5f;
-      break;
-    case 1: // Bearing Fault — high frequency vibration
-      s.x = 0.30f + sin(t * 0.05f) * 0.20f + noise;
-      s.y = 0.25f + cos(t * 0.07f) * 0.15f + noise;
-      s.z = base_z + sin(t * 0.09f) * 0.10f + noise;
-      break;
-    case 2: // Imbalance — 1x RPM dominant frequency
-      s.x = 0.50f + sin(t * 0.01f) * 0.40f + noise * 0.5f;
-      s.y = 0.50f + cos(t * 0.01f) * 0.40f + noise * 0.5f;
-      s.z = base_z + sin(t * 0.01f) * 0.05f + noise;
-      break;
-    case 3: // Overheating — irregular high amplitude
-      s.x = 0.20f + (random(-50, 50) / 100.0f);
-      s.y = 0.20f + (random(-50, 50) / 100.0f);
-      s.z = base_z + 0.30f + (random(-30, 30) / 100.0f);
-      break;
-  }
-  return s;
+static bool mpu6050_init(void) {
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU_PWR_MGMT_1);
+  Wire.write(0x00);  // Wake up: xoa bit sleep
+  return (Wire.endTransmission() == 0);
 }
 
 // ============================================================
-// Mock: Simple inference (in real system, use Edge Impulse library)
+// Doc 3 truc gia toc tu MPU6050 qua I2C
 // ============================================================
-InferenceResult_t runInference(AccelSample_t* buffer, uint16_t count) {
-  InferenceResult_t result;
-  result.timestamp_ms = millis();
+static bool mpu6050_read(float* ax, float* ay, float* az) {
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU_ACCEL_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)6, (uint8_t)true);
 
-  // Calculate RMS for each axis (simplified feature extraction)
-  float sumX = 0, sumY = 0, sumZ = 0;
-  for (int i = 0; i < count; i++) {
-    sumX += buffer[i].x * buffer[i].x;
-    sumY += buffer[i].y * buffer[i].y;
-    sumZ += (buffer[i].z - 1.0f) * (buffer[i].z - 1.0f); // remove gravity
-  }
-  float rmsX = sqrt(sumX / count);
-  float rmsY = sqrt(sumY / count);
-  float rmsZ = sqrt(sumZ / count);
-  float totalRMS = rmsX + rmsY + rmsZ;
+  if (Wire.available() < 6) return false;
 
-  // Simple threshold-based classification (demo only)
-  // In real system: ei_run_classifier() from Edge Impulse
-  if (totalRMS < 0.25f) {
-    result.class_id = 0; result.confidence = 0.92f; result.anomaly_score = 0.10f;
-  } else if (totalRMS < 0.50f) {
-    result.class_id = 1; result.confidence = 0.88f; result.anomaly_score = 1.75f;
-  } else if (totalRMS < 0.90f) {
-    result.class_id = 2; result.confidence = 0.85f; result.anomaly_score = 2.10f;
-  } else {
-    result.class_id = 3; result.confidence = 0.80f; result.anomaly_score = 3.50f;
-  }
-  return result;
+  int16_t raw_x = (Wire.read() << 8) | Wire.read();
+  int16_t raw_y = (Wire.read() << 8) | Wire.read();
+  int16_t raw_z = (Wire.read() << 8) | Wire.read();
+
+  *ax = raw_x / MPU_ACCEL_SCALE;
+  *ay = raw_y / MPU_ACCEL_SCALE;
+  *az = raw_z / MPU_ACCEL_SCALE;
+  return true;
 }
 
 // ============================================================
-// TASK 1: Task_Sensor — Priority 5 (Highest)
-// Sample accelerometer at 62.5 Hz
+// Mock inference — tinh RMS, phan nguong don gian
+// (Trong he thong that: goi ei_run_classifier() tu Edge Impulse)
 // ============================================================
-void vTaskSensor(void* pvParam) {
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  const TickType_t xInterval = pdMS_TO_TICKS((uint32_t)SAMPLE_INTERVAL_MS);
+static InferenceResult_t runInference(AccelSample_t* buf, uint16_t n) {
+  InferenceResult_t r;
+  r.ts = millis();
+
+  double sumX = 0, sumY = 0, sumZ = 0;
+  for (int i = 0; i < n; i++) {
+    sumX += (double)buf[i].x * buf[i].x;
+    sumY += (double)buf[i].y * buf[i].y;
+    sumZ += (double)buf[i].z * buf[i].z;  // Wokwi: slider = rung dong truc tiep (0=binh thuong)
+  }
+  float rms = sqrtf((float)(sumX/n)) + sqrtf((float)(sumY/n)) + sqrtf((float)(sumZ/n));
+
+  if      (rms < 0.20f) { r.class_id = 0; r.confidence = 0.93f; r.anomaly_score = 0.08f; }
+  else if (rms < 0.45f) { r.class_id = 1; r.confidence = 0.88f; r.anomaly_score = 1.72f; }
+  else if (rms < 0.80f) { r.class_id = 2; r.confidence = 0.85f; r.anomaly_score = 2.15f; }
+  else                  { r.class_id = 3; r.confidence = 0.79f; r.anomaly_score = 3.48f; }
+  return r;
+}
+
+// ============================================================
+// TASK 1 — Task_Sensor  (Priority 5)
+// Doc MPU6050 qua I2C moi 16 ms (62.5 Hz)
+// ============================================================
+static void vTaskSensor(void* pv) {
+  TickType_t       xLast     = xTaskGetTickCount();
+  const TickType_t xInterval = pdMS_TO_TICKS(SAMPLE_INTERVAL_MS);
 
   while (1) {
-    AccelSample_t sample = readAccelerometer();
-    Serial.printf("[%lums] [SENSOR] X=%.2fg Y=%.2fg Z=%.2fg → buf[%d]\n",
-                  millis(), sample.x, sample.y, sample.z, sampleCount);
+    float ax = 0, ay = 0, az = 0.0f;  // Wokwi MPU6050: slider 0 = khong rung dong
 
-    // Push to queue (non-blocking — drop if full)
-    xQueueSend(xSensorQueue, &sample, 0);
+    // Bao ve bus I2C bang mutex
+    if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+      mpu6050_read(&ax, &ay, &az);
+      xSemaphoreGive(xI2CMutex);
+    }
 
-    vTaskDelayUntil(&xLastWakeTime, xInterval);
+    AccelSample_t s = { ax, ay, az, millis() };
+    Serial.printf("[%7lu] [SENSOR]    X=%6.3fg Y=%6.3fg Z=%6.3fg buf[%d]\n",
+                  millis(), ax, ay, az, sampleCount);
+
+    xQueueSend(xSensorQueue, &s, 0);
+    vTaskDelayUntil(&xLast, xInterval);
   }
 }
 
 // ============================================================
-// TASK 2: Task_Inference — Priority 4
-// Collect window then run model
+// TASK 2 — Task_Inference  (Priority 4)
+// Thu thap du du mau -> chay mo hinh
 // ============================================================
-void vTaskInference(void* pvParam) {
-  AccelSample_t sample;
+static void vTaskInference(void* pv) {
+  AccelSample_t s;
   sampleCount = 0;
 
   while (1) {
-    // Collect samples until window is full
-    if (xQueueReceive(xSensorQueue, &sample, portMAX_DELAY) == pdTRUE) {
-      sensorBuffer[sampleCount++] = sample;
+    if (xQueueReceive(xSensorQueue, &s, portMAX_DELAY) == pdTRUE) {
+      sensorBuf[sampleCount++] = s;
 
       if (sampleCount >= WINDOW_SIZE_SAMPLES) {
-        Serial.printf("[%lums] [INFERENCE] Window ready (%d samples)! Running model...\n",
+        Serial.printf("[%7lu] [INFERENCE] Window %d samples. Running model...\n",
                       millis(), sampleCount);
 
-        uint32_t t_start = millis();
-        InferenceResult_t result = runInference(sensorBuffer, sampleCount);
-        uint32_t t_infer = millis() - t_start;
+        uint32_t t0 = millis();
+        InferenceResult_t r = runInference(sensorBuf, sampleCount);
+        uint32_t dt = millis() - t0;
 
-        Serial.printf("[%lums] [INFERENCE] Done in %lums → %s (conf=%.0f%%, anomaly=%.2f)\n",
-                      millis(), t_infer,
-                      CLASS_LABELS[result.class_id],
-                      result.confidence * 100,
-                      result.anomaly_score);
+        Serial.printf("[%7lu] [INFERENCE] %lu ms -> %s (conf=%.0f%%, anomaly=%.2f)\n",
+                      millis(), (unsigned long)dt,
+                      LABELS[r.class_id], r.confidence * 100.0f, r.anomaly_score);
 
-        // Update shared result
-        if (xSemaphoreTake(xDisplayMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-          lastResult = result;
-          xSemaphoreGive(xDisplayMutex);
+        if (xSemaphoreTake(xDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+          lastResult = r;
+          xSemaphoreGive(xDataMutex);
         }
-
-        // Send to result queue (for Alert and Display tasks)
-        xQueueSend(xResultQueue, &result, 0);
-
-        sampleCount = 0; // Reset window
+        xQueueSend(xResultQueue, &r, 0);
+        sampleCount = 0;
       }
     }
   }
 }
 
 // ============================================================
-// TASK 3: Task_Alert — Priority 3
-// React to fault detection immediately
+// TASK 3 — Task_Alert  (Priority 3)
+// Bat LED khi phat hien loi
 // ============================================================
-void vTaskAlert(void* pvParam) {
-  InferenceResult_t result;
-
+static void vTaskAlert(void* pv) {
+  InferenceResult_t r;
   while (1) {
-    if (xQueueReceive(xResultQueue, &result, portMAX_DELAY) == pdTRUE) {
-      if (result.class_id == 0) {
-        // Normal — green LED
+    if (xQueueReceive(xResultQueue, &r, portMAX_DELAY) == pdTRUE) {
+      if (r.class_id == 0) {
         digitalWrite(LED_GREEN_PIN, HIGH);
-        digitalWrite(LED_RED_PIN, LOW);
-        Serial.printf("[%lums] [ALERT]     Status OK — Normal operation\n", millis());
+        digitalWrite(LED_RED_PIN,   LOW);
+        Serial.printf("[%7lu] [ALERT]     OK - Normal operation\n", millis());
       } else {
-        // Fault detected — red LED
         digitalWrite(LED_GREEN_PIN, LOW);
-        digitalWrite(LED_RED_PIN, HIGH);
-        Serial.printf("[%lums] [ALERT]  *** FAULT: %s *** (anomaly=%.2f)\n",
-                      millis(), CLASS_LABELS[result.class_id], result.anomaly_score);
+        digitalWrite(LED_RED_PIN,   HIGH);
+        Serial.printf("[%7lu] [ALERT]  *** FAULT: %s *** anomaly=%.2f\n",
+                      millis(), LABELS[r.class_id], r.anomaly_score);
       }
     }
   }
 }
 
 // ============================================================
-// TASK 4: Task_Display — Priority 2
-// Print system status every 500ms
+// TASK 4 — Task_Display  (Priority 2)
+// In trang thai moi 500 ms
 // ============================================================
-void vTaskDisplay(void* pvParam) {
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
+static void vTaskDisplay(void* pv) {
+  TickType_t xLast = xTaskGetTickCount();
   while (1) {
-    if (xSemaphoreTake(xDisplayMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-      if (lastResult.timestamp_ms == 0) {
-        Serial.printf("[%lums] [DISPLAY]  Collecting... (%d/%d samples)\n",
+    if (xSemaphoreTake(xDataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      if (lastResult.ts == 0) {
+        Serial.printf("[%7lu] [DISPLAY]  Collecting... %d/%d\n",
                       millis(), sampleCount, WINDOW_SIZE_SAMPLES);
       } else {
-        Serial.printf("[%lums] [DISPLAY]  %s | Conf=%.0f%% | Anomaly=%.2f\n",
-                      millis(),
-                      CLASS_LABELS[lastResult.class_id],
-                      lastResult.confidence * 100,
-                      lastResult.anomaly_score);
+        Serial.printf("[%7lu] [DISPLAY]  %-14s | Conf=%.0f%% | Anomaly=%.2f\n",
+                      millis(), LABELS[lastResult.class_id],
+                      lastResult.confidence * 100.0f, lastResult.anomaly_score);
       }
-      xSemaphoreGive(xDisplayMutex);
+      xSemaphoreGive(xDataMutex);
     }
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(DISPLAY_INTERVAL_MS));
+    vTaskDelayUntil(&xLast, pdMS_TO_TICKS(DISPLAY_INTERVAL_MS));
   }
 }
 
 // ============================================================
-// TASK 5: Task_Log — Priority 1 (Lowest)
-// Log results every 1000ms
+// TASK 5 — Task_Log  (Priority 1)
+// Ghi log moi 1000 ms
 // ============================================================
-void vTaskLog(void* pvParam) {
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
+static void vTaskLog(void* pv) {
+  TickType_t xLast = xTaskGetTickCount();
   while (1) {
-    if (xSemaphoreTake(xDisplayMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-      if (lastResult.timestamp_ms > 0) {
-        Serial.printf("[%lums] [LOG]      ts=%lu class=%s conf=%.2f anomaly=%.2f\n",
-                      millis(), lastResult.timestamp_ms,
-                      CLASS_LABELS[lastResult.class_id],
-                      lastResult.confidence,
-                      lastResult.anomaly_score);
+    if (xSemaphoreTake(xDataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      if (lastResult.ts > 0) {
+        Serial.printf("[%7lu] [LOG]      ts=%lu | %s | conf=%.2f | anomaly=%.2f\n",
+                      millis(), (unsigned long)lastResult.ts,
+                      LABELS[lastResult.class_id],
+                      lastResult.confidence, lastResult.anomaly_score);
       }
-      xSemaphoreGive(xDisplayMutex);
+      xSemaphoreGive(xDataMutex);
     }
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(LOG_INTERVAL_MS));
+    vTaskDelayUntil(&xLast, pdMS_TO_TICKS(LOG_INTERVAL_MS));
   }
 }
 
 // ============================================================
-// Setup & Loop
+// setup() — chay 1 lan khi khoi dong
 // ============================================================
 void setup() {
   Serial.begin(115200);
-  delay(500);
+  delay(300);
 
+  // I2C
+  Wire.begin(21, 22);   // SDA=21, SCL=22 (default ESP32)
+  if (!mpu6050_init()) {
+    Serial.println("[ERROR] MPU6050 not found! Check wiring.");
+  } else {
+    Serial.println("[OK]    MPU6050 initialized.");
+  }
+
+  // LED
   pinMode(LED_GREEN_PIN, OUTPUT);
-  pinMode(LED_RED_PIN, OUTPUT);
-  digitalWrite(LED_GREEN_PIN, HIGH); // Start green (Normal)
-  digitalWrite(LED_RED_PIN, LOW);
+  pinMode(LED_RED_PIN,   OUTPUT);
+  digitalWrite(LED_GREEN_PIN, HIGH);
+  digitalWrite(LED_RED_PIN,   LOW);
 
-  Serial.println("=== Fan Motor Fault Detection — FreeRTOS Demo ===");
-  Serial.println("Tran Nguyen An Son — N22DCDT057");
-  Serial.println("Tasks: Sensor(5) > Inference(4) > Alert(3) > Display(2) > Log(1)");
-  Serial.println("================================================");
+  Serial.println("=== Fan Motor Fault Detection - FreeRTOS + MPU6050 ===");
+  Serial.println("Author : Tran Nguyen An Son - N22DCDT057");
+  Serial.println("Tasks  : Sensor(5) Inference(4) Alert(3) Display(2) Log(1)");
+  Serial.println("======================================================");
 
-  // Create FreeRTOS objects
-  xSensorQueue    = xQueueCreate(WINDOW_SIZE_SAMPLES, sizeof(AccelSample_t));
-  xResultQueue    = xQueueCreate(5, sizeof(InferenceResult_t));
-  xAlertSemaphore = xSemaphoreCreateBinary();
-  xDisplayMutex   = xSemaphoreCreateMutex();
+  // Tao FreeRTOS objects
+  xSensorQueue = xQueueCreate(WINDOW_SIZE_SAMPLES, sizeof(AccelSample_t));
+  xResultQueue = xQueueCreate(5,                   sizeof(InferenceResult_t));
+  xI2CMutex    = xSemaphoreCreateMutex();
+  xDataMutex   = xSemaphoreCreateMutex();
 
-  // Create tasks
+  // Tao 5 tasks
   xTaskCreate(vTaskSensor,    "Sensor",    4096, NULL, 5, NULL);
   xTaskCreate(vTaskInference, "Inference", 8192, NULL, 4, NULL);
   xTaskCreate(vTaskAlert,     "Alert",     2048, NULL, 3, NULL);
   xTaskCreate(vTaskDisplay,   "Display",   2048, NULL, 2, NULL);
   xTaskCreate(vTaskLog,       "Log",       2048, NULL, 1, NULL);
 
-  Serial.println("[SYSTEM] All tasks created. FreeRTOS scheduler running...");
+  Serial.println("[SYSTEM] All 5 tasks created. Scheduler running...");
 }
 
+// ============================================================
+// loop() — FreeRTOS xu ly het, loop de trong
+// ============================================================
 void loop() {
-  // FreeRTOS scheduler handles everything — loop() stays empty
   vTaskDelay(portMAX_DELAY);
 }

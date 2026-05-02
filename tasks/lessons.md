@@ -12,7 +12,19 @@
 
 ### Lỗi đã mắc
 1. **[2026-05-02]** Đọc nhầm thư mục dự án (`MAIN_PROJECT_THAYKIEN` thay vì `Project_thay_minh`)
-   - **Nguyên nhân**: Không kiểm tra workspace URI, đọc file từ thư mục đang mở trong editor thay vì workspace
+   - **Nguyên nhân**: Không kiểm tra workspace URI, đọc file từ thư mục đang mở trong editor
    - **Quy tắc**: Luôn kiểm tra workspace path trong user_information TRƯỚC khi đọc file
+
+2. **[2026-05-02]** FreeRTOS build lỗi trên Wokwi: `'QueueHandle_t' does not name a type`
+   - **Nguyên nhân**: Chỉ có `#include <Arduino.h>` mà thiếu các header FreeRTOS tường minh. ESP32 Arduino core có FreeRTOS nhưng cần include riêng.
+   - **Fix**: Thêm vào đầu file:
+     ```cpp
+     #include "freertos/FreeRTOS.h"
+     #include "freertos/task.h"
+     #include "freertos/queue.h"
+     #include "freertos/semphr.h"
+     #include "freertos/timers.h"
+     ```
+   - **Quy tắc**: Khi viết code FreeRTOS cho ESP32/Wokwi, LUÔN include đầy đủ các header FreeRTOS. Cũng cần có `diagram.json` với board `board-esp32-devkit-v1`.
 
 ---
