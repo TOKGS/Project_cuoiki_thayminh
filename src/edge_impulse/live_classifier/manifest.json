@@ -1,0 +1,24 @@
+{
+    "name": "Bearing Fault Detector",
+    "short_name": "BearingAI",
+    "description": "Nhận diện hỏng hóc vòng bi thời gian thực - Edge Impulse AI - N22DCDT057",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#0a0f1e",
+    "theme_color": "#00d4ff",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "categories": ["education", "utilities"],
+    "lang": "vi"
+}

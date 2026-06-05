@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Hệ thống nhận diện hỏng hóc vòng bi thời gian thực sử dụng Edge Impulse AI - N22DCDT057">
+    <meta name="theme-color" content="#0a0f1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Bearing Fault Detector | N22DCDT057</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen" class="loading-screen">
+    <div class="loading-content">
+        <div class="loading-logo">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                <circle cx="32" cy="32" r="28" stroke="url(#grad1)" stroke-width="3"/>
+                <circle cx="32" cy="32" r="18" stroke="url(#grad2)" stroke-width="2" stroke-dasharray="4 4"/>
+                <circle cx="32" cy="32" r="8" fill="url(#grad3)"/>
+                <defs>
+                    <linearGradient id="grad1" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#00d4ff"/>
+                        <stop offset="100%" stop-color="#7b2ff7"/>
+                    </linearGradient>
+                    <linearGradient id="grad2" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.5"/>
+                        <stop offset="100%" stop-color="#7b2ff7" stop-opacity="0.5"/>
+                    </linearGradient>
+                    <radialGradient id="grad3" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#00d4ff"/>
+                        <stop offset="100%" stop-color="#7b2ff7"/>
+                    </radialGradient>
+                </defs>
+            </svg>
+        </div>
+        <h2 class="loading-title">Bearing Fault Detector</h2>
+        <p class="loading-sub">Edge Impulse AI • N22DCDT057</p>
+        <div class="loading-bar">
+            <div class="loading-bar-fill" id="loading-progress"></div>
+        </div>
+        <p class="loading-status" id="loading-status">Đang khởi động...</p>
+    </div>
+</div>
+
+<!-- Main App -->
+<div id="app" class="app" style="display:none">
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="header-icon">
+                <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
+                    <circle cx="32" cy="32" r="28" stroke="url(#gh1)" stroke-width="3"/>
+                    <circle cx="32" cy="32" r="16" stroke="url(#gh2)" stroke-width="2" stroke-dasharray="4 3"/>
+                    <circle cx="32" cy="32" r="7" fill="url(#gh3)"/>
+                    <defs>
+                        <linearGradient id="gh1" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#00d4ff"/>
+                            <stop offset="100%" stop-color="#7b2ff7"/>
+                        </linearGradient>
+                        <linearGradient id="gh2" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.6"/>
+                            <stop offset="100%" stop-color="#7b2ff7" stop-opacity="0.6"/>
+                        </linearGradient>
+                        <radialGradient id="gh3" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#00d4ff"/>
+                            <stop offset="100%" stop-color="#7b2ff7"/>
+                        </radialGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>
+                <h1 class="header-title">Bearing Fault Detector</h1>
+                <p class="header-sub">Edge Impulse • Project 1019223</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-dot" id="status-dot"></div>
+            <span class="status-text" id="status-text">Sẵn sàng</span>
+        </div>
+    </header>
+
+    <!-- Mode Selector -->
+    <div class="mode-selector">
+        <button class="mode-btn active" id="btn-simulate" onclick="switchMode('simulate')">
+            <span class="mode-icon">📊</span>
+            <span>Mô phỏng</span>
+        </button>
+        <button class="mode-btn" id="btn-api" onclick="switchMode('api')">
+            <span class="mode-icon">🌐</span>
+            <span>API Live</span>
+        </button>
+        <button class="mode-btn" id="btn-wasm" onclick="switchMode('wasm')">
+            <span class="mode-icon">⚡</span>
+            <span>WASM Local</span>
+        </button>
+    </div>
+
+    <!-- Result Card -->
+    <div class="result-card glass-card">
+        <div class="result-header">
+            <span class="result-label">Kết quả phân loại</span>
+            <span class="result-time" id="result-time">--:--:--</span>
+        </div>
+
+        <!-- Main Prediction Display -->
+        <div class="prediction-display">
+            <div class="prediction-icon" id="prediction-icon">🔵</div>
+            <div class="prediction-info">
+                <div class="prediction-class" id="prediction-class">---</div>
+                <div class="prediction-label-vi" id="prediction-label-vi">Chưa có kết quả</div>
+                <div class="prediction-confidence" id="prediction-confidence">0.00%</div>
+            </div>
+        </div>
+
+        <!-- Confidence Gauge -->
+        <div class="gauge-container">
+            <svg class="gauge-svg" viewBox="0 0 200 120">
+                <path d="M 20 110 A 80 80 0 0 1 180 110" stroke="#1a2040" stroke-width="16" fill="none" stroke-linecap="round"/>
+                <path d="M 20 110 A 80 80 0 0 1 180 110" stroke="url(#gaugeGrad)" stroke-width="16" fill="none" 
+                      stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3" 
+                      id="gauge-arc" style="transition: stroke-dashoffset 0.5s ease"/>
+                <text x="100" y="105" text-anchor="middle" fill="#e2e8f0" font-size="22" font-weight="700" id="gauge-text">0%</text>
+                <text x="100" y="120" text-anchor="middle" fill="#64748b" font-size="9">CONFIDENCE</text>
+                <text x="22" y="125" fill="#64748b" font-size="8">0%</text>
+                <text x="175" y="125" fill="#64748b" font-size="8">100%</text>
+                <defs>
+                    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#00d4ff"/>
+                        <stop offset="100%" stop-color="#7b2ff7"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+        </div>
+    </div>
+
+    <!-- All Classes Confidence -->
+    <div class="bars-card glass-card">
+        <h3 class="card-title">Độ tin cậy các lớp</h3>
+        <div class="bars-list" id="bars-list">
+            <!-- Generated by JS -->
+        </div>
+    </div>
+
+    <!-- Anomaly Score -->
+    <div class="anomaly-card glass-card">
+        <div class="anomaly-header">
+            <h3 class="card-title">Anomaly Detection</h3>
+            <div class="anomaly-badge" id="anomaly-badge">Bình thường</div>
+        </div>
+        <div class="anomaly-meter">
+            <div class="anomaly-bar">
+                <div class="anomaly-fill" id="anomaly-fill" style="width: 0%"></div>
+            </div>
+            <div class="anomaly-labels">
+                <span>Bình thường</span>
+                <span>Nghi ngờ</span>
+                <span>Bất thường</span>
+            </div>
+        </div>
+        <div class="anomaly-score">Điểm: <span id="anomaly-score">0.00</span></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel glass-card">
+        <!-- Simulate Mode Panel -->
+        <div id="panel-simulate" class="mode-panel active">
+            <p class="panel-desc">Chọn một mẫu dữ liệu để mô phỏng phân loại</p>
+            <div class="sample-grid">
+                <button class="sample-btn normal" onclick="simulateClassify('normal')">
+                    <span class="sample-icon">🟢</span>
+                    <span class="sample-name">Normal</span>
+                    <span class="sample-vi">Bình thường</span>
+                </button>
+                <button class="sample-btn fault" onclick="simulateClassify('ball_fault')">
+                    <span class="sample-icon">🔴</span>
+                    <span class="sample-name">Ball Fault</span>
+                    <span class="sample-vi">Lỗi bi</span>
+                </button>
+                <button class="sample-btn inner" onclick="simulateClassify('inner_race_fault')">
+                    <span class="sample-icon">🟠</span>
+                    <span class="sample-name">Inner Race</span>
+                    <span class="sample-vi">Lỗi vòng trong</span>
+                </button>
+                <button class="sample-btn outer" onclick="simulateClassify('outer_race_fault')">
+                    <span class="sample-icon">🟡</span>
+                    <span class="sample-name">Outer Race</span>
+                    <span class="sample-vi">Lỗi vòng ngoài</span>
+                </button>
+            </div>
+            <div class="upload-section">
+                <label class="upload-btn" for="csv-upload">
+                    <span>📁 Upload CSV</span>
+                    <input type="file" id="csv-upload" accept=".csv" onchange="handleCsvUpload(event)" style="display:none">
+                </label>
+            </div>
+        </div>
+
+        <!-- API Live Mode Panel -->
+        <div id="panel-api" class="mode-panel" style="display:none">
+            <p class="panel-desc">Tự động thu dữ liệu từ cảm biến điện thoại → phân loại qua Edge Impulse API</p>
+            <div class="api-config">
+                <label class="input-label">API Key</label>
+                <input type="password" id="api-key-input" class="api-input" placeholder="ei_xxxxxxxxxxxxxxxx" 
+                       value="ei_3e606fc9f4d7b0fba6224725c6ce8eb9c2814e84523058e1" autocomplete="off">
+                <p class="input-hint">🔒 Key lưu trong bộ nhớ trình duyệt</p>
+            </div>
+
+            <!-- Live Sensor Section -->
+            <div class="sensor-live-box" id="sensor-live-box">
+                <div class="sensor-vals" id="sensor-vals">
+                    <div class="sensor-val-item"><span class="sensor-axis">accX</span><span id="sx">0.000</span></div>
+                    <div class="sensor-val-item"><span class="sensor-axis">accY</span><span id="sy">0.000</span></div>
+                    <div class="sensor-val-item"><span class="sensor-axis">accZ</span><span id="sz">0.000</span></div>
+                </div>
+                <div class="sensor-progress">
+                    <div class="sensor-progress-bar" id="sensor-progress-bar"></div>
+                </div>
+                <p class="sensor-info" id="sensor-info">Nhấn nút bên dưới để bắt đầu</p>
+            </div>
+
+            <div class="api-btn-row">
+                <button class="classify-btn" id="live-sensor-btn" onclick="startLiveSensor()">
+                    <span class="btn-icon">📡</span> Bắt đầu Live
+                </button>
+                <button class="stop-btn" id="live-sensor-stop" onclick="stopLiveSensor()" style="display:none">
+                    <span class="btn-icon">⏹</span> Dừng
+                </button>
+            </div>
+
+            <!-- Manual fallback -->
+            <details class="manual-fallback">
+                <summary>📁 Hoặc nhập CSV thủ công</summary>
+                <div class="api-config" style="margin-top:10px">
+                    <textarea id="csv-input" class="csv-textarea" rows="4" 
+                        placeholder="0,0.1234,-0.0456,9.8123&#10;16,0.1189,-0.0423,9.8201&#10;..."></textarea>
+                </div>
+                <button class="classify-btn" id="api-classify-btn" onclick="classifyViaAPI()" style="margin-top:8px">
+                    <span class="btn-icon">🚀</span> Phân loại CSV
+                </button>
+            </details>
+
+            <div class="api-status" id="api-status"></div>
+        </div>
+
+        <!-- WASM Mode Panel -->
+        <div id="panel-wasm" class="mode-panel" style="display:none">
+            <p class="panel-desc">Chạy inference trực tiếp trên thiết bị với WebAssembly</p>
+            <div class="wasm-status-box" id="wasm-status-box">
+                <div class="wasm-icon">⚡</div>
+                <div class="wasm-title" id="wasm-title">Chưa có WASM Model</div>
+                <div class="wasm-desc" id="wasm-desc">Cần export WebAssembly từ Edge Impulse Studio</div>
+            </div>
+            <div class="wasm-steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-text">Vào <strong>Deployment</strong> tab trong Studio 1019223</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-text">Chọn <strong>WebAssembly</strong> → <strong>Build</strong></div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-text">Giải nén ZIP → copy vào thư mục <code>wasm/</code></div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-text">Reload trang này</div>
+                </div>
+            </div>
+            <div class="wasm-actions" id="wasm-actions" style="display:none">
+                <button class="classify-btn" onclick="startWasmClassify()">
+                    <span class="btn-icon">🎤</span> Bắt đầu Live Classification
+                </button>
+                <button class="stop-btn" id="wasm-stop-btn" onclick="stopWasmClassify()" style="display:none">
+                    <span class="btn-icon">⏹</span> Dừng
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Log -->
+    <div class="history-card glass-card">
+        <div class="history-header">
+            <h3 class="card-title">Lịch sử phân loại</h3>
+            <button class="clear-btn" onclick="clearHistory()">🗑 Xóa</button>
+        </div>
+        <div class="history-list" id="history-list">
+            <div class="history-empty">Chưa có kết quả nào</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>N22DCDT057 • Trần Nguyễn An Sơn • PTIT HCM</p>
+        <p>Edge Impulse Project ID: 1019223 • CWRU Bearing Dataset</p>
+    </footer>
+
+</div>
+
+<script>
+// Bootstrap WASM Module BEFORE loading edge-impulse-standalone.js
+var Module = {
+    locateFile: function(path) {
+        return 'wasm/' + path;
+    },
+    onRuntimeInitialized: function() {
+        window._ei_wasm_ready = true;
+        console.log('[EI-WASM] Runtime initialized - emcc_run_classifier ready');
+        document.dispatchEvent(new Event('ei-wasm-ready'));
+    }
+};
+</script>
+<script src="wasm/edge-impulse-standalone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
