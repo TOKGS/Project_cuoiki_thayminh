@@ -12,10 +12,10 @@
 Dự án tập trung vào bài toán **Bảo trì dự đoán (Predictive Maintenance)** cho hệ thống quạt gió công nghiệp bằng phương pháp phân tích rung động (Vibration Analysis). Sử dụng công nghệ **TinyML / Edge AI** và nền tảng **Edge Impulse Studio**, mô hình học máy được huấn luyện và triển khai trực tiếp xuống thiết bị biên (điện thoại di động) để nhận dạng hỏng hóc trong thời gian thực mà không cần kết nối internet hay xử lý trên Cloud.
 
 ### Các trạng thái phân loại động cơ:
-1. **Normal (`normal`)**: Động cơ hoạt động bình thường, không lỗi.
-2. **Bearing Fault (`bearing_fault`)**: Lỗi vòng bi (hỏng hóc cơ học phổ biến nhất).
-3. **Imbalance (`imbalance`)**: Lệch tâm cơ khí / mất cân bằng rotor.
-4. **Overheating (`overheating`)**: Quá nhiệt cuộn dây stator hoặc quá tải động cơ.
+1. **Normal **: Động cơ hoạt động bình thường, không lỗi.
+2. **Bearing Fault **: Lỗi vòng bi (hỏng hóc cơ học phổ biến nhất).
+3. **Imbalance **: Lệch tâm cơ khí / mất cân bằng rotor.
+4. **Overheating **: Quá nhiệt cuộn dây stator hoặc quá tải động cơ.
 
 ---
 
