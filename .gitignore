@@ -1,0 +1,12 @@
+.skill/
+node_modules/
+tasks/
+*.docx
+*.pdf
+~$*
+ptit_logo.png
+package-lock.json
+generate_docx.js
+CLAUDE.md
+download_logo.js
+check_images.js

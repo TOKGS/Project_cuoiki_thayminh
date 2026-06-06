@@ -1,43 +1,43 @@
-# CHUONG 4. XAY DUNG MO HINH TREN EDGE IMPULSE
+# CHƯƠNG 4. XÂY DỰNG MÔ HÌNH TRÊN EDGE IMPULSE
 
-## 4.1. Gioi thieu nen tang Edge Impulse trong de tai
+## 4.1. Giới thiệu nền tảng Edge Impulse trong đề tài
 
-Edge Impulse Studio duoc su dung lam moi truong xay dung pipeline TinyML cho bai toan phan loai hong hoc vong bi dong co. Nen tang nay cho phep thuc hien lien tuc cac buoc upload du lieu, thiet ke impulse, trich xuat dac trung, huan luyen, danh gia va toi uu mo hinh ngay tren giao dien web [2]. Project thuc te cua de tai la **N22DCDT057_NhanDienHongHoc** (Project ID: 1019223) da duoc hoan thanh va cong khai tai: `https://studio.edgeimpulse.com/public/1019223/live`.
+Edge Impulse Studio được sử dụng làm môi trường xây dựng pipeline TinyML cho bài toán phân loại hỏng hóc vòng bi động cơ. Nền tảng này cho phép thực hiện liên tục các bước tải dữ liệu, thiết kế impulse, trích xuất đặc trưng, huấn luyện, đánh giá và tối ưu mô hình ngay trên giao diện web [2]. Dự án thực tế của đề tài là **N22DCDT057_NhanDienHongHoc** (Project ID: 1019223) đã được hoàn thành và công khai tại: `https://studio.edgeimpulse.com/public/1019223/live`.
 
-## 4.2. Chuan bi va nap du lieu
+## 4.2. Chuẩn bị và nạp dữ liệu
 
-### 4.2.1. Nguon du lieu
+### 4.2.1. Nguồn dữ liệu
 
-Bo du lieu su dung la **CWRU Bearing Dataset** duoc tai tu Kaggle (`brjapon/cwru-bearing-datasets`). Cac file `.mat` duoc trich xuat kenh `DE_time` (Drive End accelerometer) va xu ly thanh cac mau CSV theo cua so 2 giay.
+Bộ dữ liệu sử dụng là **CWRU Bearing Dataset** được tải từ Kaggle (`brjapon/cwru-bearing-datasets`). Các tệp `.mat` được trích xuất kênh `DE_time` (Drive End accelerometer) và xử lý thành các mẫu CSV theo cửa sổ 2 giây.
 
-### 4.2.2. Anh xa nhan
+### 4.2.2. Ánh xạ nhãn
 
-| File goc CWRU | Nhan trong de tai | Giai thich |
+| File gốc CWRU | Nhãn trong đề tài | Giải thích |
 |---|---|---|
-| `Normal_1_098.mat` | `normal` | Hoat dong binh thuong |
-| `B007 / B014 / B021` | `ball_fault` | Loi bi lan (Ball Fault) |
-| `IR007 / IR014 / IR021` | `inner_race_fault` | Loi vong trong (Inner Race Fault) |
-| `OR007 / OR014 / OR021` | `outer_race_fault` | Loi vong ngoai (Outer Race Fault) |
+| `Normal_1_098.mat` | `normal` | Hoạt động bình thường |
+| `B007 / B014 / B021` | `ball_fault` | Lỗi bi lăn (Ball Fault) |
+| `IR007 / IR014 / IR021` | `inner_race_fault` | Lỗi vòng trong (Inner Race Fault) |
+| `OR007 / OR014 / OR021` | `outer_race_fault` | Lỗi vòng ngoài (Outer Race Fault) |
 
-### 4.2.3. Thong ke bo du lieu sau khi upload
+### 4.2.3. Thống kê bộ dữ liệu sau khi tải lên
 
-| Thong so | Gia tri thuc te |
+| Thông số | Giá trị thực tế |
 |---|---|
-| Tong so mau | **3,238 mau** |
-| Tong thoi gian du lieu | **5 phut 43 giay** |
-| Ty le train / test | 80% / 20% |
-| Tan so lay mau | **12,004.8 Hz** (toc do thuc cua CWRU Drive End) |
-| Truc cam bien | `accX` (1 truc rung dong chinh) |
-| Cua so lay mau | 2,000 ms |
-| Buoc truot (stride) | 200 ms |
+| Tổng số mẫu | **3,238 mẫu** |
+| Tổng thời gian dữ liệu | **5 phút 43 giây** |
+| Tỷ lệ train / test | 80% / 20% |
+| Tần số lấy mẫu | **12,004.8 Hz** (tốc độ thực của CWRU Drive End) |
+| Trục cảm biến | `accX` (1 trục rung động chính) |
+| Cửa sổ lấy mẫu | 2,000 ms |
+| Bước trượt (stride) | 200 ms |
 
-> Ghi chu: CWRU Bearing Dataset co tan so thu muc 12 kHz, khac voi tan so 62.5 Hz tren MPU6050 cua mach ESP32. Edge Impulse tiep nhan truc tiep tan so 12 kHz va tu dong cau hinh DSP phu hop. Mach ESP32 thu thap du lieu thuc te o 62.5 Hz, do do o buoc trien khai thuc te can quan tam su khac biet nay.
+> Ghi chú: CWRU Bearing Dataset có tần số thu mục 12 kHz, khác với tần số 62.5 Hz trên MPU6050 của mạch ESP32. Edge Impulse tiếp nhận trực tiếp tần số 12 kHz và tự động cấu hình DSP phù hợp. Mạch ESP32 thu thập dữ liệu thực tế ở 62.5 Hz, do đó ở bước triển khai thực tế cần quan tâm sự khác biệt này.
 
-## 4.3. Thiet ke Impulse
+## 4.3. Thiết kế Impulse
 
-Trong muc **Impulse design**, cau hinh thuc te duoc cai dat nhu sau:
+Trong mục **Impulse design**, cấu hình thực tế được cài đặt như sau:
 
-| Thanh phan | Cau hinh thuc te |
+| Thành phần | Cấu hình thực tế |
 |---|---|
 | Input data | Acceleration data (accX) |
 | Window size | **2,000 ms** |
@@ -46,143 +46,137 @@ Trong muc **Impulse design**, cau hinh thuc te duoc cai dat nhu sau:
 | Processing block | Spectral Analysis |
 | Learning block 1 | Classification (Keras) |
 | Learning block 2 | Anomaly Detection (K-Means) |
-| So lop dau ra | 4 lop |
+| Số lớp đầu ra | 4 lớp |
 
-> Bo sung 2 khoi song song (Classification + Anomaly Detection) cho phep he thong vua phan loai chinh xac trang thai hong hoc, vua canh bao khi gap tin hieu bat thuong ngoai pham vi huan luyen.
+> Bổ sung 2 khối song song (Classification + Anomaly Detection) cho phép hệ thống vừa phân loại chính xác trạng thái hỏng hóc, vừa cảnh báo khi gặp tín hiệu bất thường ngoài phạm vi huấn luyện.
 
-## 4.4. Khoi xu ly dac trung: Spectral Analysis
+## 4.4. Khối xử lý đặc trưng: Spectral Analysis
 
-### 4.4.1. Tham so cai dat
+### 4.4.1. Tham số cài đặt
 
-Khoi **Spectral Analysis** duoc cau hinh voi cac tham so cu the nhu sau:
+Khối **Spectral Analysis** được cấu hình với các tham số cụ thể như sau:
 
-| Tham so | Gia tri thuc te | Y nghia |
+| Tham số | Giá trị thực tế | Ý nghĩa |
 |---|---|---|
-| Scale axes | 1 | Khong thu phong du lieu |
-| Input decimation ratio | 1 | Giu nguyen do phan giai tan so |
-| Filter type | **None** | Khong loc truoc tin hieu |
-| FFT length | **256 diem** | Do phan giai tan so: 46.89 Hz/bin |
-| Take log of spectrum | **True** | Lay log bien do de on dinh hoa |
-| Overlap FFT frames | **True** | Tang so luong frame cho phan tich |
-| Number of peaks | 0 | Khong trich xuat dac trung tan so dinh |
+| Scale axes | 1 | Không thu phóng dữ liệu |
+| Input decimation ratio | 1 | Giữ nguyên độ phân giải tần số |
+| Filter type | **None** | Không lọc trước tín hiệu |
+| FFT length | **256 điểm** | Độ phân giải tần số: 46.89 Hz/bin |
+| Take log of spectrum | **True** | Lấy log biên độ để ổn định hóa |
+| Overlap FFT frames | **True** | Tăng số lượng frame cho phân tích |
+| Number of peaks | 0 | Không trích xuất đặc trưng tần số đỉnh |
 
-### 4.4.2. Ket qua trich xuat dac trung
+### 4.4.2. Kết quả trích xuất đặc trưng
 
-Sau khi xu ly, moi mau sinh ra **133 dac trung** gom:
+Sau khi xử lý, mỗi mẫu sinh ra **133 đặc trưng** gồm:
 
-| Nhom dac trung | So luong | Chi tiet |
+| Nhóm đặc trưng | Số lượng | Chi tiết |
 |---|---|---|
-| Dac trung thong ke | 5 | RMS, Skewness, Kurtosis, Spectral Skewness, Spectral Kurtosis |
-| Pho cong suat FFT | 128 | Cac bin tan so tu 23.45 Hz den 6,002.4 Hz (do rong 46.89 Hz/bin) |
-| **Tong cong** | **133** | Vector dac trung dau vao mo hinh |
+| Đặc trưng thống kê | 5 | RMS, Skewness, Kurtosis, Spectral Skewness, Spectral Kurtosis |
+| Phổ công suất FFT | 128 | Các bin tần số từ 23.45 Hz đến 6,002.4 Hz (độ rộng 46.89 Hz/bin) |
+| **Tổng cộng** | **133** | Vector đặc trưng đầu vào mô hình |
 
-> 128 bin pho tuong ung voi FFT 256 diem (lay nua pho duong, loai bin DC = 128 bin huu ich). Do phan giai 46.89 Hz/bin phu hop de phan biet cac tan so hu hong dac trung cua vong bi.
+> 128 bin phổ tương ứng với FFT 256 điểm (lấy nửa phổ dương, loại bin DC = 128 bin hữu ích). Độ phân giải 46.89 Hz/bin phù hợp để phân biệt các tần số hư hỏng đặc trưng của vòng bi.
 
-## 4.5. Huan luyen mo hinh phan loai (Keras)
+## 4.5. Huấn luyện mô hình phân loại (Keras)
 
-### 4.5.1. Kien truc mang neural
+### 4.5.1. Kiến trúc mạng neural
 
-Mo hinh **Classification** su dung mang neural day du (Dense Neural Network) voi kien truc:
+Mô hình **Classification** sử dụng mạng neural đầy đủ (Dense Neural Network) với kiến trúc:
 
-| Lop | So neuron | Ghi chu |
+| Lớp | Số neuron | Ghi chú |
 |---|---|---|
-| Input | 133 | = so dac trung Spectral Analysis |
-| Dense 1 | **20** | Lop an thu nhat |
-| Dense 2 | **10** | Lop an thu hai |
-| Dense 3 | **40** | Lop an thu ba |
-| Output (Softmax) | **4** | 4 lop: normal, ball_fault, inner_race_fault, outer_race_fault |
+| Input | 133 | = số đặc trưng Spectral Analysis |
+| Dense 1 | **20** | Lớp ẩn thứ nhất |
+| Dense 2 | **10** | Lớp ẩn thứ hai |
+| Dense 3 | **40** | Lớp ẩn thứ ba |
+| Output (Softmax) | **4** | 4 lớp: normal, ball_fault, inner_race_fault, outer_race_fault |
 
-### 4.5.2. Ket qua huan luyen
+### 4.5.2. Kết quả huấn luyện
 
-| Chi so | Gia tri thuc te |
+| Chỉ số | Giá trị thực tế |
 |---|---|
 | **Accuracy (Validation set)** | **100.0%** |
 | **Loss (Validation set)** | **0.00** |
-| So lop phan loai | 4 |
-| Ket qua Confusion Matrix | Tat ca 4 lop duoc phan loai chinh xac 100% |
+| Số lớp phân loại | 4 |
+| Kết quả Confusion Matrix | Tất cả 4 lớp được phân loại chính xác 100% |
 
-> Ket qua 100% accuracy tren tap validation cho thay dac trung pho cong suat FFT phan biet rat ro rang giua cac trang thai hong hoc vong bi. Dieu nay phu hop voi ly thuyet: moi loai loi vong bi tao ra tan so hu hong dac trung (BPFI, BPFO, BSF) co the nhan biet qua pho tan so.
+> Kết quả 100% accuracy trên tập validation cho thấy đặc trưng phổ công suất FFT phân biệt rất rõ ràng giữa các trạng thái hỏng hóc vòng bi. Điều này phù hợp với lý thuyết: mỗi loại lỗi vòng bi tạo ra tần số hư hỏng đặc trưng (BPFI, BPFO, BSF) có thể nhận biết qua phổ tần số.
 
-### 4.5.3. Hieu nang tren thiet bi - Phan biet 2 che do trien khai
+### 4.5.3. Hiệu năng trên thiết bị - Phân biệt 2 chế độ triển khai
 
-Edge Impulse ho tro 2 con duong trien khai khac nhau, anh huong den loai model su dung:
+Edge Impulse hỗ trợ 2 con đường triển khai khác nhau, ảnh hưởng đến loại model sử dụng:
 
-| Che do trien khai | Model su dung | Phu hop voi |
+| Chế độ triển khai | Model sử dụng | Phù hợp với |
 |---|---|---|
-| **WebAssembly (Browser/Phone)** | **Float32 Unoptimized** | Demo tren dien thoai, trinh duyet |
-| **C++ Library / Firmware** | **Int8 Quantized** | MCU nhung (STM32, ESP32, Cortex-M) |
+| **WebAssembly (Browser/Phone)** | **Float32 Unoptimized** | Demo trên điện thoại, trình duyệt |
+| **C++ Library / Firmware** | **Int8 Quantized** | MCU nhúng (STM32, ESP32, Cortex-M) |
 
-**Trong de tai nay, demo tren dien thoai su dung WebAssembly (float32).**
+**Trong đề tài này, demo trên điện thoại sử dụng WebAssembly (float32).**
 
-#### Hieu nang model Float32 (Phone / WebAssembly)
+#### Hiệu năng model Float32 (Phone / WebAssembly)
 
-| Chi so | Gia tri thuc te |
+| Chỉ số | Giá trị thực tế |
 |---|---|
 | **Accuracy (Validation)** | **100.0%** |
 | **Loss** | **0.00** |
-| Latency tren dien thoai | Phu thuoc CPU dien thoai (~5-50 ms tuy thiet bi) |
-| Kich thuoc WASM | ~200-500 KB (bao gom runtime WebAssembly) |
+| Latency trên điện thoại | Phụ thuộc CPU điện thoại (~5-50 ms tùy thiết bị) |
+| Kích thước WASM | ~200-500 KB (bao gồm runtime WebAssembly) |
 
-> **Ghi chu**: Cac chi so RAM 1.7 KB va Flash 17.7 KB tren Cortex-M4F 80 MHz chi ap dung cho truong hop xuat C++ library cho MCU nhung, khong ap dung cho che do phone/WebAssembly. Khi chay tren trinh duyet dien thoai, bo nho duoc cap phat boi JavaScript runtime va khong bi gioi han khat nhu MCU.
+> Ghi chú: Các chỉ số RAM 1.7 KB và Flash 17.7 KB trên Cortex-M4F 80 MHz chỉ áp dụng cho trường hợp xuất C++ library cho MCU nhúng, không áp dụng cho chế độ phone/WebAssembly. Khi chạy trên trình duyệt điện thoại, bộ nhớ được cấp phát bởi JavaScript runtime và không bị giới hạn khắt khe như MCU.
 
-## 4.6. Khoi Anomaly Detection (K-Means)
+## 4.6. Khối Anomaly Detection (K-Means)
 
-Song song voi Classification, khoi **Anomaly Detection** su dung thuat toan K-Means duoc them vao de:
-- Phat hien cac mau rung dong khong thuoc 4 lop da huan luyen.
-- Canh bao khi co tinh huong hu hong moi ma mo hinh chua hoc.
+Song song với Classification, khối **Anomaly Detection** sử dụng thuật toán K-Means được thêm vào để:
+- Phát hiện các mẫu rung động không thuộc 4 lớp đã huấn luyện.
+- Cảnh báo khi có tình huống hư hỏng mới mà mô hình chưa học.
 
-| Tham so | Gia tri |
+| Tham số | Giá trị |
 |---|---|
-| Thuat toan | K-Means clustering |
-| Dau ra | Anomaly score (gia tri thuc, cang cao = cang bat thuong) |
-| Nguong canh bao | Xac dinh theo ung dung thuc te |
+| Thuật toán | K-Means clustering |
+| Đầu ra | Anomaly score (giá trị thực, càng cao = càng bất thường) |
+| Ngưỡng cảnh báo | Xác định theo ứng dụng thực tế |
 
-## 4.7. Danh gia tong the mo hinh
+## 4.7. Đánh giá tổng thể mô hình
 
-### 4.7.1. Ket qua phan loai (Float32 - WebAssembly / Phone)
+### 4.7.1. Kết quả phân loại (Float32 - WebAssembly / Phone)
 
-| Chi so | Gia tri thuc te |
+| Chỉ số | Giá trị thực tế |
 |---|---|
 | Accuracy (Validation set) | **100.0%** |
 | Accuracy (Test set) | **100.0%** |
 | Loss | **0.00** |
-| Mo hinh su dung khi demo dien thoai | **Float32 Unoptimized** (WebAssembly) |
+| Mô hình sử dụng khi demo điện thoại | **Float32 Unoptimized** (WebAssembly) |
 
-### 4.7.2. Tham khao: Hieu nang neu trien khai len MCU (Int8 Quantized)
+### 4.7.2. Tham khảo: Hiệu năng nếu triển khai lên MCU (Int8 Quantized)
 
-Neu trong tuong lai muon chuyen tu phone sang MCU nhung (STM32, ESP32...), Edge Impulse da san sang xuat C++ library voi model int8 co hieu nang:
+Nếu trong tương lai muốn chuyển từ phone sang MCU nhúng (STM32, ESP32...), Edge Impulse đã sẵn sàng xuất C++ library với model int8 có hiệu năng:
 
-| Chi so | Gia tri (tham khao - MCU Cortex-M4F 80 MHz) |
+| Chỉ số | Giá trị (tham khảo - MCU Cortex-M4F 80 MHz) |
 |---|---|
 | Latency | 1 ms |
 | Peak RAM | 1.7 KB |
 | Flash | 17.7 KB |
 
-### 4.7.3. Tong hop cau hinh va hieu nang
+### 4.7.3. Tổng hợp cấu hình và hiệu năng
 
-| Noi dung | Gia tri thuc te |
+| Nội dung | Giá trị thực tế |
 |---|---|
-| Dataset | CWRU Bearing Dataset - 3,238 mau, 5 phut 43 giay |
-| So lop | 4 (`normal`, `ball_fault`, `inner_race_fault`, `outer_race_fault`) |
-| Tan so lay mau | 12,004.8 Hz |
-| Cua so phan tich | 2,000 ms (buoc truot 200 ms) |
-| Processing block | Spectral Analysis (FFT 256 diem, 133 dac trung) |
+| Dataset | CWRU Bearing Dataset - 3,238 mẫu, 5 phút 43 giây |
+| Số lớp | 4 (`normal`, `ball_fault`, `inner_race_fault`, `outer_race_fault`) |
+| Tần số lấy mẫu | 12,004.8 Hz |
+| Cửa sổ phân tích | 2,000 ms (bước trượt 200 ms) |
+| Processing block | Spectral Analysis (FFT 256 điểm, 133 đặc trưng) |
 | Learning block | Dense NN [133 → 20 → 10 → 40 → 4] + K-Means Anomaly |
 | Accuracy | **100.0%** (validation + test) |
-| Model su dung khi demo | **Float32 Unoptimized** (WebAssembly - chay tren dien thoai) |
+| Mô hình sử dụng khi demo | **Float32 Unoptimized** (WebAssembly - chạy trên điện thoại) |
 
-### 4.7.3. Nhan xet chuong
+### 4.7.4. Nhận xét chương
 
-De tai da xay dung thanh cong pipeline TinyML tren Edge Impulse voi ket qua vuot muc muc tieu dat ra (accuracy >= 85%). Ket qua 100% accuracy duoc giai thich boi:
+Đề tài đã xây dựng thành công pipeline TinyML trên Edge Impulse với kết quả vượt mức mục tiêu đặt ra (accuracy >= 85%). Kết quả 100% accuracy được giải thích bởi:
 
-1. **Du lieu CWRU co tinh tach biet cao**: Pho rung dong cua cac loai hong hoc vong bi co tan so dac trung rieng biet, day du san biet khi dung FFT.
-2. **Dac trung pho cong suat phu hop**: 128 bin FFT + 5 dac trung thong ke tao thanh vector 133 chieu du phong phu de phan biet 4 lop.
-3. **Mo hinh kien truc don gian nhung hieu qua**: 3 lop an voi tong 70 neuron du de hoc biet 4 phan phoi lop tach biet.
+1. **Dữ liệu CWRU có tính tách biệt cao**: Phổ rung động của các loại hỏng hóc vòng bi có tần số đặc trưng riêng biệt, đầy đủ phân biệt khi dùng FFT.
+2. **Đặc trưng phổ công suất phù hợp**: 128 bin FFT + 5 đặc trưng thống kê tạo thành vector 133 chiều đủ phong phú để phân biệt 4 lớp.
+3. **Mô hình kiến trúc đơn giản nhưng hiệu quả**: 3 lớp ẩn với tổng 70 neuron đủ để học biết 4 phân phối lớp tách biệt.
 
-Hieu nang 1 ms suy luan va 1.7 KB RAM cho thay mo hinh co the trien khai tuc thoi tren cac MCU nhu STM32F4 hoac ESP32, dam bao tinh nang thoi gian thuc cua he thong giam sat dong co.
-
-**Tai lieu tham khao chuong nay:**
-
-[2] Edge Impulse, "Edge Impulse Documentation," Edge Impulse Docs. Available: https://docs.edgeimpulse.com/
-
-[3] Case Western Reserve University, "CWRU Bearing Data Center," Available: https://engineering.case.edu/bearingdatacenter
+Hiệu năng 1 ms suy luận và 1.7 KB RAM cho thấy mô hình có thể triển khai tức thời trên các MCU như STM32F4 hoặc ESP32, đảm bảo tính năng thời gian thực của hệ thống giám sát động cơ.
