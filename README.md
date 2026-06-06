@@ -25,7 +25,6 @@ Dự án tập trung vào bài toán **Bảo trì dự đoán (Predictive Mainte
 EDGEIMPULSE/
 ├── data/                            # Thư mục chứa mã nguồn tải và xử lý dataset
 │   ├── preprocess_cwru.py           # Tiền xử lý CWRU Bearing Dataset từ file .mat sang CSV
-│   └── download_logo.js             # Script tự động tải PTIT logo cho bìa báo cáo
 ├── report/                          # Nội dung chi tiết báo cáo tiểu luận bằng Markdown
 │   └── chapters/                    # Các chương từ Chương 1 đến Chương 5
 │       ├── chuong1_tong_quan.md
