@@ -1,8 +1,7 @@
 .skill/
 node_modules/
 tasks/
-*.docx
-*.pdf
+TranNguyenAnSon_hedieuhanhnhung_hkii2026.docx
 ~$*
 ptit_logo.png
 package-lock.json
