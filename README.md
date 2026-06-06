@@ -40,8 +40,7 @@ EDGEIMPULSE/
 │           ├── index.html & style.css
 │           ├── app.js               # Logic điều khiển, thu mẫu gia tốc kế và suy luận
 │           └── README.md            # Hướng dẫn chi tiết chạy Web App qua HTTPS
-├── .gitignore                       # Cấu hình bỏ qua các thư mục node_modules, temp, .skill...
-├── generate_docx.js                 # Script Node.js tự động compile các chương Markdown thành Word
+├── .gitignore                       # Cấu hình bỏ qua các thư mục 
 ├── TranNguyenAnSon_hedieuhanhnhung.docx # Báo cáo tiểu luận hoàn chỉnh (định dạng Word)
 └── TranNguyenAnSon_hedieuhanhnhung.pdf  # Báo cáo tiểu luận hoàn chỉnh (định dạng PDF)
 ```
@@ -93,5 +92,5 @@ Thực hiện chạy cục bộ bằng cách:
 ## 📄 Tài Liệu Báo Cáo Đính Kèm
 
 Toàn bộ báo cáo tiểu luận đã được xuất bản trực tiếp trong thư mục gốc của repository này:
-* 📘 Tệp Word chính thức: [TranNguyenAnSon_hedieuhanhnhung.docx](file:///c:/StudyStuff/EDGEIMPULSE/TranNguyenAnSon_hedieuhanhnhung.docx) (Được tạo tự động bằng Node.js script qua thư viện `docx`).
-* 📕 Tệp PDF chính thức: [TranNguyenAnSon_hedieuhanhnhung.pdf](file:///c:/StudyStuff/EDGEIMPULSE/TranNguyenAnSon_hedieuhanhnhung.pdf) (Bản xuất trực tiếp chuẩn in ấn).
+* 📘 Tệp Word chính thức: [TranNguyenAnSon_hedieuhanhnhung.docx](file:///c:/StudyStuff/EDGEIMPULSE/TranNguyenAnSon_hedieuhanhnhung.docx).
+* 📕 Tệp PDF chính thức: [TranNguyenAnSon_hedieuhanhnhung.pdf](file:///c:/StudyStuff/EDGEIMPULSE/TranNguyenAnSon_hedieuhanhnhung.pdf).
